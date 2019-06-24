@@ -5,8 +5,8 @@
 #ifndef V8_WASM_WASM_JS_H_
 #define V8_WASM_WASM_JS_H_
 
+#include "include/v8.h"
 #include "src/common/globals.h"
-
 namespace v8 {
 namespace internal {
 

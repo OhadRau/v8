@@ -899,7 +899,8 @@ bool WasmTableObject::IsValidElement(Isolate* isolate,
   // {WasmCapiFunction} objects.
   if (entry->IsNull(isolate)) return true;
   return WasmExportedFunction::IsWasmExportedFunction(*entry) ||
-         WasmCapiFunction::IsWasmCapiFunction(*entry);
+         WasmCapiFunction::IsWasmCapiFunction(*entry) ||
+         WasmPreloadFunction::IsWasmPreloadFunction(*entry);
 }
 
 void WasmTableObject::Set(Isolate* isolate, Handle<WasmTableObject> table,
@@ -932,10 +933,13 @@ void WasmTableObject::Set(Isolate* isolate, Handle<WasmTableObject> table,
     DCHECK_NOT_NULL(wasm_function->sig);
     UpdateDispatchTables(isolate, table, entry_index, wasm_function->sig,
                          target_instance, func_index);
-  } else {
-    DCHECK(WasmCapiFunction::IsWasmCapiFunction(*entry));
+  } else if (WasmCapiFunction::IsWasmCapiFunction(*entry)) {
     UpdateDispatchTables(isolate, table, entry_index,
                          Handle<WasmCapiFunction>::cast(entry));
+  } else {
+    DCHECK(WasmPreloadFunction::IsWasmPreloadFunction(*entry));
+    UpdateDispatchTables(isolate, table, entry_index,
+                         Handle<WasmPreloadFunction>::cast(entry));
   }
   entries->set(entry_index, *entry);
 }
@@ -957,7 +961,8 @@ Handle<Object> WasmTableObject::Get(Isolate* isolate,
 
   // Now we handle the anyfunc case.
   if (WasmExportedFunction::IsWasmExportedFunction(*entry) ||
-      WasmCapiFunction::IsWasmCapiFunction(*entry)) {
+      WasmCapiFunction::IsWasmCapiFunction(*entry) ||
+      WasmPreloadFunction::IsWasmPreloadFunction(*entry)) {
     return entry;
   }
 
@@ -1074,6 +1079,66 @@ void WasmTableObject::UpdateDispatchTables(
         wasm_code->reloc_info().length());
     Handle<Tuple2> tuple = isolate->factory()->NewTuple2(
         instance, capi_function, AllocationType::kOld);
+    // Note that {SignatureMap::Find} may return {-1} if the signature is
+    // not found; it will simply never match any check.
+    auto sig_id = instance->module()->signature_map.Find(sig);
+    IndirectFunctionTableEntry(instance, entry_index)
+        .Set(sig_id, wasm_code->instruction_start(), *tuple);
+  }
+}
+
+void WasmTableObject::UpdateDispatchTables(
+    Isolate* isolate, Handle<WasmTableObject> table, int entry_index,
+    Handle<WasmPreloadFunction> preload_function) {
+  // We simply need to update the IFTs for each instance that imports
+  // this table.
+  Handle<FixedArray> dispatch_tables(table->dispatch_tables(), isolate);
+  DCHECK_EQ(0, dispatch_tables->length() % kDispatchTableNumElements);
+
+  // Reconstruct signature.
+  // TODO(jkummerow): Unify with "SignatureHelper" in c-api.cc.
+  PodArray<wasm::ValueType> serialized_sig =
+      preload_function->GetSerializedSignature();
+  int total_count = serialized_sig.length() - 1;
+  std::unique_ptr<wasm::ValueType[]> reps(new wasm::ValueType[total_count]);
+  int result_count;
+  static const wasm::ValueType kMarker = wasm::kWasmStmt;
+  for (int i = 0, j = 0; i <= total_count; i++) {
+    if (serialized_sig.get(i) == kMarker) {
+      result_count = i;
+      continue;
+    }
+    reps[j++] = serialized_sig.get(i);
+  }
+  int param_count = total_count - result_count;
+  wasm::FunctionSig sig(result_count, param_count, reps.get());
+
+  for (int i = 0; i < dispatch_tables->length();
+       i += kDispatchTableNumElements) {
+    int table_index =
+        Smi::cast(dispatch_tables->get(i + kDispatchTableIndexOffset)).value();
+    if (table_index > 0) {
+      // Only table 0 has a dispatch table in the instance at the moment.
+      // TODO(ahaas): Introduce dispatch tables for the other tables as well.
+      continue;
+    }
+    Handle<WasmInstanceObject> instance(
+        WasmInstanceObject::cast(
+            dispatch_tables->get(i + kDispatchTableInstanceOffset)),
+        isolate);
+    // TODO(jkummerow): Find a way to avoid recompiling wrappers.
+    wasm::NativeModule* native_module =
+        instance->module_object().native_module();
+    Address host_address = preload_function->GetHostCallTarget();
+    wasm::WasmCodeRefScope code_ref_scope;
+    wasm::WasmCode* wasm_code = compiler::CompileWasmCapiCallWrapper(
+        isolate->wasm_engine(), native_module, &sig, host_address);
+    isolate->counters()->wasm_generated_code_size()->Increment(
+        wasm_code->instructions().length());
+    isolate->counters()->wasm_reloc_size()->Increment(
+        wasm_code->reloc_info().length());
+    Handle<Tuple2> tuple = isolate->factory()->NewTuple2(
+        instance, preload_function, AllocationType::kOld);
     // Note that {SignatureMap::Find} may return {-1} if the signature is
     // not found; it will simply never match any check.
     auto sig_id = instance->module()->signature_map.Find(sig);
@@ -1922,6 +1987,27 @@ bool WasmCapiFunction::IsSignatureEqual(const wasm::FunctionSig* sig) const {
   return true;
 }
 
+bool WasmPreloadFunction::IsSignatureEqual(const wasm::FunctionSig* sig) const {
+  // TODO(jkummerow): Unify with "SignatureHelper" in c-api.cc.
+  int param_count = static_cast<int>(sig->parameter_count());
+  int result_count = static_cast<int>(sig->return_count());
+  PodArray<wasm::ValueType> serialized_sig =
+      shared().wasm_preload_function_data().serialized_signature();
+  if (param_count + result_count + 1 != serialized_sig.length()) return false;
+  int serialized_index = 0;
+  for (int i = 0; i < result_count; i++, serialized_index++) {
+    if (sig->GetReturn(i) != serialized_sig.get(serialized_index)) {
+      return false;
+    }
+  }
+  if (serialized_sig.get(serialized_index) != wasm::kWasmStmt) return false;
+  serialized_index++;
+  for (int i = 0; i < param_count; i++, serialized_index++) {
+    if (sig->GetParam(i) != serialized_sig.get(serialized_index)) return false;
+  }
+  return true;
+}
+
 // static
 Handle<JSReceiver> WasmExceptionPackage::New(
     Isolate* isolate, Handle<WasmExceptionTag> exception_tag, int size) {
@@ -2045,6 +2131,19 @@ bool WasmCapiFunction::IsWasmCapiFunction(Object object) {
   return js_function.shared().HasWasmCapiFunctionData();
 }
 
+bool WasmPreloadFunction::IsWasmPreloadFunction(Object object) {
+  if (!object.IsJSFunction()) return false;
+  JSFunction js_function = JSFunction::cast(object);
+  // TODO(jkummerow): Enable this when there is a JavaScript wrapper
+  // able to call this function.
+  // if (js_function->code()->kind() != Code::WASM_TO_PRELOAD_FUNCTION) {
+  //   return false;
+  // }
+  // DCHECK(js_function->shared()->HasWasmPreloadFunctionData());
+  // return true;
+  return js_function.shared().HasWasmPreloadFunctionData();
+}
+
 Handle<WasmCapiFunction> WasmCapiFunction::New(
     Isolate* isolate, Address call_target, void* embedder_data,
     Handle<PodArray<wasm::ValueType>> serialized_signature) {
@@ -2061,6 +2160,26 @@ Handle<WasmCapiFunction> WasmCapiFunction::New(
   Handle<SharedFunctionInfo> shared =
       isolate->factory()->NewSharedFunctionInfoForWasmCapiFunction(fun_data);
   return Handle<WasmCapiFunction>::cast(
+      isolate->factory()->NewFunctionFromSharedFunctionInfo(
+          shared, isolate->native_context()));
+}
+
+Handle<WasmPreloadFunction> WasmPreloadFunction::New(
+    Isolate* isolate, Address call_target, void* embedder_data,
+    Handle<PodArray<wasm::ValueType>> serialized_signature) {
+  Handle<WasmPreloadFunctionData> fun_data =
+      Handle<WasmPreloadFunctionData>::cast(isolate->factory()->NewStruct(
+          WASM_PRELOAD_FUNCTION_DATA_TYPE, AllocationType::kOld));
+  fun_data->set_call_target(call_target);
+  fun_data->set_embedder_data(embedder_data);
+  fun_data->set_serialized_signature(*serialized_signature);
+  // TODO(jkummerow): Install a JavaScript wrapper. For now, calling
+  // these functions directly is unsupported; they can only be called
+  // from Wasm code.
+  fun_data->set_wrapper_code(isolate->builtins()->builtin(Builtins::kIllegal));
+  Handle<SharedFunctionInfo> shared =
+      isolate->factory()->NewSharedFunctionInfoForWasmPreloadFunction(fun_data);
+  return Handle<WasmPreloadFunction>::cast(
       isolate->factory()->NewFunctionFromSharedFunctionInfo(
           shared, isolate->native_context()));
 }
@@ -2188,8 +2307,16 @@ Address WasmCapiFunction::GetHostCallTarget() const {
   return shared().wasm_capi_function_data().call_target();
 }
 
+Address WasmPreloadFunction::GetHostCallTarget() const {
+  return shared().wasm_preload_function_data().call_target();
+}
+
 PodArray<wasm::ValueType> WasmCapiFunction::GetSerializedSignature() const {
   return shared().wasm_capi_function_data().serialized_signature();
+}
+
+PodArray<wasm::ValueType> WasmPreloadFunction::GetSerializedSignature() const {
+  return shared().wasm_preload_function_data().serialized_signature();
 }
 
 Handle<WasmExceptionTag> WasmExceptionTag::New(Isolate* isolate, int index) {

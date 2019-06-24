@@ -922,6 +922,13 @@ extern class WasmCapiFunctionData extends Struct {
   serialized_signature: ByteArray;  // PodArray<wasm::ValueType>
 }
 
+extern class WasmPreloadFunctionData extends Struct {
+  call_target: RawPtr;
+  embedder_data: RawPtr;
+  wrapper_code: Code;
+  serialized_signature: ByteArray; // PodArray<wasm::ValueType>
+}
+
 extern class WasmDebugInfo extends Struct {
   instance: WasmInstanceObject;
   interpreter_handle: Foreign | Undefined;

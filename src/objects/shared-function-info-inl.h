@@ -671,6 +671,10 @@ bool SharedFunctionInfo::HasWasmCapiFunctionData() const {
   return function_data().IsWasmCapiFunctionData();
 }
 
+bool SharedFunctionInfo::HasWasmPreloadFunctionData() const {
+  return function_data().IsWasmPreloadFunctionData();
+}
+
 Object SharedFunctionInfo::script() const {
   Object maybe_script = script_or_debug_info();
   if (maybe_script.IsDebugInfo()) {

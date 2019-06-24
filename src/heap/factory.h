@@ -67,6 +67,7 @@ class TemplateObjectDescription;
 class UncompiledDataWithoutPreparseData;
 class UncompiledDataWithPreparseData;
 class WasmCapiFunctionData;
+class WasmPreloadFunctionData;
 class WasmExportedFunctionData;
 class WasmJSFunctionData;
 class WeakCell;
@@ -835,6 +836,9 @@ class V8_EXPORT_PRIVATE Factory {
 
   Handle<SharedFunctionInfo> NewSharedFunctionInfoForWasmCapiFunction(
       Handle<WasmCapiFunctionData> data);
+
+  Handle<SharedFunctionInfo> NewSharedFunctionInfoForWasmPreloadFunction(
+      Handle<WasmPreloadFunctionData> data);
 
   Handle<SharedFunctionInfo> NewSharedFunctionInfoForBuiltin(
       MaybeHandle<String> name, int builtin_index,

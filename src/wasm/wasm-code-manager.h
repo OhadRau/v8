@@ -73,6 +73,7 @@ class V8_EXPORT_PRIVATE WasmCode final {
   enum Kind {
     kFunction,
     kWasmToCapiWrapper,
+    kWasmToPreloadWrapper,
     kWasmToJsWrapper,
     kRuntimeStub,
     kInterpreterEntry,

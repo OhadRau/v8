@@ -104,6 +104,7 @@ namespace internal {
   V(TUPLE3_TYPE)                                         \
   V(ARRAY_BOILERPLATE_DESCRIPTION_TYPE)                  \
   V(WASM_CAPI_FUNCTION_DATA_TYPE)                        \
+  V(WASM_PRELOAD_FUNCTION_DATA_TYPE)                     \
   V(WASM_DEBUG_INFO_TYPE)                                \
   V(WASM_EXCEPTION_TAG_TYPE)                             \
   V(WASM_EXPORTED_FUNCTION_DATA_TYPE)                    \
@@ -327,6 +328,8 @@ namespace internal {
     array_boilerplate_description)                                             \
   V(_, WASM_CAPI_FUNCTION_DATA_TYPE, WasmCapiFunctionData,                     \
     wasm_capi_function_data)                                                   \
+  V(_, WASM_PRELOAD_FUNCTION_DATA_TYPE, WasmPreloadFunctionData,               \
+    wasm_preload_function_data)                                                \
   V(_, WASM_DEBUG_INFO_TYPE, WasmDebugInfo, wasm_debug_info)                   \
   V(_, WASM_EXCEPTION_TAG_TYPE, WasmExceptionTag, wasm_exception_tag)          \
   V(_, WASM_EXPORTED_FUNCTION_DATA_TYPE, WasmExportedFunctionData,             \

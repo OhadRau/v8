@@ -4914,6 +4914,8 @@ Code SharedFunctionInfo::GetCode() const {
     return wasm_js_function_data().wrapper_code();
   } else if (data.IsWasmCapiFunctionData()) {
     return wasm_capi_function_data().wrapper_code();
+  } else if (data.IsWasmPreloadFunctionData()) {
+    return wasm_preload_function_data().wrapper_code();
   }
   UNREACHABLE();
 }
@@ -4932,6 +4934,11 @@ WasmJSFunctionData SharedFunctionInfo::wasm_js_function_data() const {
 WasmCapiFunctionData SharedFunctionInfo::wasm_capi_function_data() const {
   DCHECK(HasWasmCapiFunctionData());
   return WasmCapiFunctionData::cast(function_data());
+}
+
+WasmPreloadFunctionData SharedFunctionInfo::wasm_preload_function_data() const {
+  DCHECK(HasWasmPreloadFunctionData());
+  return WasmPreloadFunctionData::cast(function_data());
 }
 
 SharedFunctionInfo::ScriptIterator::ScriptIterator(Isolate* isolate,

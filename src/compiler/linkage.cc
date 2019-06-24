@@ -38,6 +38,7 @@ std::ostream& operator<<(std::ostream& os, const CallDescriptor::Kind& k) {
       os << "Addr";
       break;
     case CallDescriptor::kCallWasmCapiFunction:
+    case CallDescriptor::kCallWasmPreloadFunction:
       os << "WasmExit";
       break;
     case CallDescriptor::kCallWasmFunction:
@@ -153,6 +154,7 @@ int CallDescriptor::CalculateFixedFrameSize() const {
     case kCallWasmImportWrapper:
       return WasmCompiledFrameConstants::kFixedSlotCount;
     case kCallWasmCapiFunction:
+    case kCallWasmPreloadFunction:
       return WasmExitFrameConstants::kFixedSlotCount;
   }
   UNREACHABLE();

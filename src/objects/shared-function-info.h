@@ -33,6 +33,7 @@ class CoverageInfo;
 class DebugInfo;
 class IsCompiledScope;
 class WasmCapiFunctionData;
+class WasmPreloadFunctionData;
 class WasmExportedFunctionData;
 class WasmJSFunctionData;
 
@@ -373,6 +374,8 @@ class SharedFunctionInfo : public HeapObject {
   WasmJSFunctionData wasm_js_function_data() const;
   inline bool HasWasmCapiFunctionData() const;
   WasmCapiFunctionData wasm_capi_function_data() const;
+  inline bool HasWasmPreloadFunctionData() const;
+  WasmPreloadFunctionData wasm_preload_function_data() const;
 
   // Clear out pre-parsed scope data from UncompiledDataWithPreparseData,
   // turning it into UncompiledDataWithoutPreparseData.

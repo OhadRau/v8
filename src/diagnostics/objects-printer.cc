@@ -2040,6 +2040,16 @@ void WasmCapiFunctionData::WasmCapiFunctionDataPrint(
   os << "\n";
 }
 
+void WasmPreloadFunctionData::WasmPreloadFunctionDataPrint(
+    std::ostream& os) {  // NOLINT
+  PrintHeader(os, "WasmPreloadFunctionData");
+  os << "\n - call_target: " << call_target();
+  os << "\n - embedder_data: " << embedder_data();
+  os << "\n - wrapper_code: " << Brief(wrapper_code());
+  os << "\n - serialized_signature: " << Brief(serialized_signature());
+  os << "\n";
+}
+
 void ObjectTemplateInfo::ObjectTemplateInfoPrint(std::ostream& os) {  // NOLINT
   PrintHeader(os, "ObjectTemplateInfo");
   os << "\n - tag: " << Brief(tag());

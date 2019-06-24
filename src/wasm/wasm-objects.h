@@ -38,6 +38,7 @@ class BreakPoint;
 class JSArrayBuffer;
 class SeqOneByteString;
 class WasmCapiFunction;
+class WasmPreloadFunction;
 class WasmDebugInfo;
 class WasmExceptionTag;
 class WasmInstanceObject;
@@ -301,6 +302,10 @@ class V8_EXPORT_PRIVATE WasmTableObject : public JSObject {
                                    Handle<WasmTableObject> table,
                                    int entry_index,
                                    Handle<WasmCapiFunction> capi_function);
+  static void UpdateDispatchTables(Isolate* isolate,
+                                   Handle<WasmTableObject> table,
+                                   int entry_index,
+                                   Handle<WasmPreloadFunction> preload_function);
 
   static void ClearDispatchTables(Isolate* isolate,
                                   Handle<WasmTableObject> table, int index);
@@ -708,6 +713,25 @@ class WasmCapiFunction : public JSFunction {
   OBJECT_CONSTRUCTORS(WasmCapiFunction, JSFunction);
 };
 
+// A native function exposed to Wasm via the V8 API
+class WasmPreloadFunction : public JSFunction {
+ public:
+  static bool IsWasmPreloadFunction(Object object);
+
+  static Handle<WasmPreloadFunction> New(
+      Isolate* isolate, Address call_target, void* embedder_data,
+      Handle<PodArray<wasm::ValueType>> serialized_signature);
+
+  Address GetHostCallTarget() const;
+  PodArray<wasm::ValueType> GetSerializedSignature() const;
+  // Checks whether the given {sig} has the same parameter types as the
+  // serialized signature stored within this preloaded function object.
+  bool IsSignatureEqual(const wasm::FunctionSig* sig) const;
+
+  DECL_CAST(WasmPreloadFunction)
+  OBJECT_CONSTRUCTORS(WasmPreloadFunction, JSFunction);
+};
+
 class WasmCapiFunctionData : public Struct {
  public:
   DECL_PRIMITIVE_ACCESSORS(call_target, Address)
@@ -727,6 +751,27 @@ class WasmCapiFunctionData : public Struct {
   using BodyDescriptor = FlexibleBodyDescriptor<kStartOfStrongFieldsOffset>;
 
   OBJECT_CONSTRUCTORS(WasmCapiFunctionData, Struct);
+};
+
+class WasmPreloadFunctionData : public Struct {
+ public:
+  DECL_PRIMITIVE_ACCESSORS(call_target, Address)
+  DECL_PRIMITIVE_ACCESSORS(embedder_data, void*)
+  DECL_ACCESSORS(wrapper_code, Code)
+  DECL_ACCESSORS(serialized_signature, PodArray<wasm::ValueType>)
+
+  DECL_CAST(WasmPreloadFunctionData)
+
+  DECL_PRINTER(WasmPreloadFunctionData)
+  DECL_VERIFIER(WasmPreloadFunctionData)
+
+  DEFINE_FIELD_OFFSET_CONSTANTS(HeapObject::kHeaderSize,
+                                TORQUE_GENERATED_WASM_PRELOAD_FUNCTION_DATA_FIELDS)
+
+  STATIC_ASSERT(kStartOfStrongFieldsOffset == kWrapperCodeOffset);
+  using BodyDescriptor = FlexibleBodyDescriptor<kStartOfStrongFieldsOffset>;
+
+  OBJECT_CONSTRUCTORS(WasmPreloadFunctionData, Struct);
 };
 
 // Information for a WasmExportedFunction which is referenced as the function

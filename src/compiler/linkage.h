@@ -172,13 +172,14 @@ class V8_EXPORT_PRIVATE CallDescriptor final
  public:
   // Describes the kind of this call, which determines the target.
   enum Kind {
-    kCallCodeObject,         // target is a Code object
-    kCallJSFunction,         // target is a JSFunction object
-    kCallAddress,            // target is a machine pointer
-    kCallWasmCapiFunction,   // target is a Wasm C API function
-    kCallWasmFunction,       // target is a wasm function
-    kCallWasmImportWrapper,  // target is a wasm import wrapper
-    kCallBuiltinPointer,     // target is a builtin pointer
+    kCallCodeObject,          // target is a Code object
+    kCallJSFunction,          // target is a JSFunction object
+    kCallAddress,             // target is a machine pointer
+    kCallWasmCapiFunction,    // target is a Wasm C API function
+    kCallWasmPreloadFunction, // target is a Wasm preloaded function
+    kCallWasmFunction,        // target is a wasm function
+    kCallWasmImportWrapper,   // target is a wasm import wrapper
+    kCallBuiltinPointer,      // target is a builtin pointer
   };
 
   enum Flag {
@@ -239,6 +240,9 @@ class V8_EXPORT_PRIVATE CallDescriptor final
 
   // Returns {true} if this descriptor is a call to a Wasm C API function.
   bool IsWasmCapiFunction() const { return kind_ == kCallWasmCapiFunction; }
+
+  // Returns {true} if this descriptor is a call to a Wasm preloaded function.
+  bool IsWasmPreloadFunction() const { return kind_ == kCallWasmPreloadFunction; }
 
   bool RequiresFrameAsIncoming() const {
     return IsCFunctionCall() || IsJSFunctionCall() || IsWasmFunctionCall();

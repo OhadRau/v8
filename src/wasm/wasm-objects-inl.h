@@ -351,6 +351,24 @@ OPTIONAL_ACCESSORS(WasmDebugInfo, c_wasm_entries, FixedArray,
 OPTIONAL_ACCESSORS(WasmDebugInfo, c_wasm_entry_map, Managed<wasm::SignatureMap>,
                    kCWasmEntryMapOffset)
 
+// WasmPreloadFunction
+WasmPreloadFunction::WasmPreloadFunction(Address ptr) : JSFunction(ptr) {
+  SLOW_DCHECK(IsWasmPreloadFunction(*this));
+}
+CAST_ACCESSOR(WasmPreloadFunction)
+
+// WasmCapiFunctionData
+OBJECT_CONSTRUCTORS_IMPL(WasmPreloadFunctionData, Struct)
+CAST_ACCESSOR(WasmPreloadFunctionData)
+PRIMITIVE_ACCESSORS(WasmPreloadFunctionData, call_target, Address,
+                    kCallTargetOffset)
+PRIMITIVE_ACCESSORS(WasmPreloadFunctionData, embedder_data, void*,
+                    kEmbedderDataOffset)
+ACCESSORS(WasmPreloadFunctionData, wrapper_code, Code, kWrapperCodeOffset)
+ACCESSORS(WasmPreloadFunctionData, serialized_signature, PodArray<wasm::ValueType>,
+          kSerializedSignatureOffset)
+
+
 #undef OPTIONAL_ACCESSORS
 #undef READ_PRIMITIVE_FIELD
 #undef WRITE_PRIMITIVE_FIELD

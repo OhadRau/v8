@@ -35,17 +35,18 @@ class Code : public HeapObject {
   // cache state, and arguments count.
   using Flags = uint32_t;
 
-#define CODE_KIND_LIST(V)   \
-  V(OPTIMIZED_FUNCTION)     \
-  V(BYTECODE_HANDLER)       \
-  V(STUB)                   \
-  V(BUILTIN)                \
-  V(REGEXP)                 \
-  V(WASM_FUNCTION)          \
-  V(WASM_TO_CAPI_FUNCTION)  \
-  V(WASM_TO_JS_FUNCTION)    \
-  V(JS_TO_WASM_FUNCTION)    \
-  V(WASM_INTERPRETER_ENTRY) \
+#define CODE_KIND_LIST(V)     \
+  V(OPTIMIZED_FUNCTION)       \
+  V(BYTECODE_HANDLER)         \
+  V(STUB)                     \
+  V(BUILTIN)                  \
+  V(REGEXP)                   \
+  V(WASM_FUNCTION)            \
+  V(WASM_TO_CAPI_FUNCTION)    \
+  V(WASM_TO_PRELOAD_FUNCTION) \
+  V(WASM_TO_JS_FUNCTION)      \
+  V(JS_TO_WASM_FUNCTION)      \
+  V(WASM_INTERPRETER_ENTRY)   \
   V(C_WASM_ENTRY)
 
   enum Kind {

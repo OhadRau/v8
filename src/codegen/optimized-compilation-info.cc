@@ -84,6 +84,7 @@ void OptimizedCompilationInfo::ConfigureFlags() {
       break;
     case Code::WASM_FUNCTION:
     case Code::WASM_TO_CAPI_FUNCTION:
+    case Code::WASM_TO_PRELOAD_FUNCTION:
       SetFlag(kSwitchJumpTableEnabled);
       break;
     default:
@@ -170,6 +171,7 @@ StackFrame::Type OptimizedCompilationInfo::GetOutputStackFrameType() const {
     case Code::WASM_FUNCTION:
       return StackFrame::WASM_COMPILED;
     case Code::WASM_TO_CAPI_FUNCTION:
+    case Code::WASM_TO_PRELOAD_FUNCTION:
       return StackFrame::WASM_EXIT;
     case Code::JS_TO_WASM_FUNCTION:
       return StackFrame::JS_TO_WASM;

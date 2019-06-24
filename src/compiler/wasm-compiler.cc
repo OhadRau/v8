@@ -5988,6 +5988,13 @@ WasmImportCallKind GetWasmImportCallKind(Handle<JSReceiver> target,
     }
     return WasmImportCallKind::kWasmToCapi;
   }
+  if (WasmPreloadFunction::IsWasmPreloadFunction(*target)) {
+    WasmPreloadFunction preload_function = WasmPreloadFunction::cast(*target);
+    if (!preload_function.IsSignatureEqual(expected_sig)) {
+      return WasmImportCallKind::kLinkError;
+    }
+    return WasmImportCallKind::kWasmToPreload;
+  }
   // Assuming we are calling to JS, check whether this would be a runtime error.
   if (!wasm::IsJSCompatibleSignature(expected_sig, has_bigint_feature)) {
     return WasmImportCallKind::kRuntimeTypeError;
@@ -6227,6 +6234,63 @@ wasm::WasmCompilationResult CompileWasmImportCallWrapper(
 }
 
 wasm::WasmCode* CompileWasmCapiCallWrapper(wasm::WasmEngine* wasm_engine,
+                                           wasm::NativeModule* native_module,
+                                           wasm::FunctionSig* sig,
+                                           Address address) {
+  TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("v8.wasm"), "CompileWasmCapiFunction");
+
+  Zone zone(wasm_engine->allocator(), ZONE_NAME);
+
+  // TODO(jkummerow): Extract common code into helper method.
+  SourcePositionTable* source_positions = nullptr;
+  MachineGraph* mcgraph = new (&zone) MachineGraph(
+      new (&zone) Graph(&zone), new (&zone) CommonOperatorBuilder(&zone),
+      new (&zone) MachineOperatorBuilder(
+          &zone, MachineType::PointerRepresentation(),
+          InstructionSelector::SupportedMachineOperatorFlags(),
+          InstructionSelector::AlignmentRequirements()));
+  JSGraph jsgraph(nullptr, mcgraph->graph(), mcgraph->common(), nullptr,
+                  nullptr, mcgraph->machine());
+
+  WasmWrapperGraphBuilder builder(&zone, &jsgraph, sig, source_positions,
+                                  StubCallMode::kCallWasmRuntimeStub,
+                                  native_module->enabled_features());
+
+  // Set up the graph start.
+  int param_count = static_cast<int>(sig->parameter_count()) +
+                    1 /* offset for first parameter index being -1 */ +
+                    1 /* Wasm instance */ + 1 /* kExtraCallableParam */;
+  Node* start = builder.Start(param_count);
+  Node* effect = start;
+  Node* control = start;
+  builder.set_effect_ptr(&effect);
+  builder.set_control_ptr(&control);
+  builder.set_instance_node(builder.Param(wasm::kWasmInstanceParameterIndex));
+  builder.BuildCapiCallWrapper(address);
+
+  // Run the compiler pipeline to generate machine code.
+  CallDescriptor* call_descriptor =
+      GetWasmCallDescriptor(&zone, sig, WasmGraphBuilder::kNoRetpoline,
+                            WasmCallKind::kWasmCapiFunction);
+  if (mcgraph->machine()->Is32()) {
+    call_descriptor = GetI32WasmCallDescriptor(&zone, call_descriptor);
+  }
+
+  const char* debug_name = "WasmCapiCall";
+  wasm::WasmCompilationResult result = Pipeline::GenerateCodeForWasmNativeStub(
+      wasm_engine, call_descriptor, mcgraph, Code::WASM_TO_CAPI_FUNCTION,
+      wasm::WasmCode::kWasmToCapiWrapper, debug_name,
+      WasmStubAssemblerOptions(), source_positions);
+  std::unique_ptr<wasm::WasmCode> wasm_code = native_module->AddCode(
+      wasm::kAnonymousFuncIndex, result.code_desc, result.frame_slot_count,
+      result.tagged_parameter_slots, std::move(result.protected_instructions),
+      std::move(result.source_positions), wasm::WasmCode::kWasmToCapiWrapper,
+      wasm::ExecutionTier::kNone);
+  return native_module->PublishCode(std::move(wasm_code));
+}
+
+// TODO(ohadrau): Change the semantics of a preload
+wasm::WasmCode* CompileWasmPreloadCallWrapper(wasm::WasmEngine* wasm_engine,
                                            wasm::NativeModule* native_module,
                                            wasm::FunctionSig* sig,
                                            Address address) {
@@ -6548,7 +6612,7 @@ CallDescriptor* GetWasmCallDescriptor(
   // The extra here is to accomodate the instance object as first parameter
   // and, when specified, the additional callable.
   bool extra_callable_param =
-      call_kind == kWasmImportWrapper || call_kind == kWasmCapiFunction;
+      call_kind == kWasmImportWrapper || call_kind == kWasmCapiFunction || call_kind == kWasmPreloadFunction;
   int extra_params = extra_callable_param ? 2 : 1;
   LocationSignature::Builder locations(zone, fsig->return_count(),
                                        fsig->parameter_count() + extra_params);
@@ -6618,9 +6682,11 @@ CallDescriptor* GetWasmCallDescriptor(
     descriptor_kind = CallDescriptor::kCallWasmFunction;
   } else if (call_kind == kWasmImportWrapper) {
     descriptor_kind = CallDescriptor::kCallWasmImportWrapper;
-  } else {
-    DCHECK_EQ(call_kind, kWasmCapiFunction);
+  } else if (call_kind == kWasmCapiFunction) {
     descriptor_kind = CallDescriptor::kCallWasmCapiFunction;
+  } else {
+    DCHECK_EQ(call_kind, kWasmPreloadFunction);
+    descriptor_kind = CallDescriptor::kCallWasmPreloadFunction;
   }
 
   CallDescriptor::Flags flags =

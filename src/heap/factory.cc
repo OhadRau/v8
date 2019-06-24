@@ -3397,6 +3397,12 @@ Handle<SharedFunctionInfo> Factory::NewSharedFunctionInfoForWasmCapiFunction(
                                Builtins::kNoBuiltinId, kConciseMethod);
 }
 
+Handle<SharedFunctionInfo> Factory::NewSharedFunctionInfoForWasmPreloadFunction(
+    Handle<WasmPreloadFunctionData> data) {
+  return NewSharedFunctionInfo(MaybeHandle<String>(), data,
+                               Builtins::kNoBuiltinId, kConciseMethod);
+}
+
 Handle<SharedFunctionInfo> Factory::NewSharedFunctionInfoForBuiltin(
     MaybeHandle<String> maybe_name, int builtin_index, FunctionKind kind) {
   Handle<SharedFunctionInfo> shared = NewSharedFunctionInfo(

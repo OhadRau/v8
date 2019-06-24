@@ -68,6 +68,7 @@ enum class WasmImportCallKind : uint8_t {
   kLinkError,                      // static WASM->WASM type error
   kRuntimeTypeError,               // runtime WASM->JS type error
   kWasmToCapi,                     // fast WASM->C-API call
+  kWasmToPreload,                  // fast WASM->V8 API preload call
   kWasmToWasm,                     // fast WASM->WASM call
   kJSFunctionArityMatch,           // fast WASM->JS call
   kJSFunctionArityMatchSloppy,     // fast WASM->JS call, sloppy receiver
@@ -122,6 +123,11 @@ V8_EXPORT_PRIVATE wasm::WasmCompilationResult CompileWasmImportCallWrapper(
 wasm::WasmCode* CompileWasmCapiCallWrapper(wasm::WasmEngine*,
                                            wasm::NativeModule*,
                                            wasm::FunctionSig*, Address address);
+
+// Compiles a host call wrapper, which allows WASM to call host functions.
+wasm::WasmCode* CompileWasmPreloadCallWrapper(wasm::WasmEngine*,
+                                              wasm::NativeModule*,
+                                              wasm::FunctionSig*, Address address);
 
 // Creates a code object calling a wasm function with the given signature,
 // callable from JS.
@@ -612,7 +618,7 @@ class WasmGraphBuilder {
   TrapId GetTrapIdForTrap(wasm::TrapReason reason);
 };
 
-enum WasmCallKind { kWasmFunction, kWasmImportWrapper, kWasmCapiFunction };
+enum WasmCallKind { kWasmFunction, kWasmImportWrapper, kWasmCapiFunction, kWasmPreloadFunction };
 
 V8_EXPORT_PRIVATE CallDescriptor* GetWasmCallDescriptor(
     Zone* zone, wasm::FunctionSig* signature,

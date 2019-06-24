@@ -60,6 +60,7 @@ namespace internal {
   V(UncompiledDataWithoutPreparseData, UncompiledDataWithoutPreparseData) \
   V(UncompiledDataWithPreparseData, UncompiledDataWithPreparseData)       \
   V(WasmCapiFunctionData, WasmCapiFunctionData)                           \
+  V(WasmPreloadFunctionData, WasmPreloadFunctionData)                     \
   V(WasmInstanceObject, WasmInstanceObject)
 
 #define FORWARD_DECLARE(TypeName, Type) class Type;

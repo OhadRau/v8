@@ -89,6 +89,7 @@ CodeGenerator::CodeGenerator(
   Code::Kind code_kind = info->code_kind();
   if (code_kind == Code::WASM_FUNCTION ||
       code_kind == Code::WASM_TO_CAPI_FUNCTION ||
+      code_kind == Code::WASM_TO_PRELOAD_FUNCTION ||
       code_kind == Code::WASM_TO_JS_FUNCTION ||
       code_kind == Code::WASM_INTERPRETER_ENTRY ||
       (Builtins::IsBuiltinId(builtin_index) &&
@@ -762,6 +763,7 @@ StubCallMode CodeGenerator::DetermineStubCallMode() const {
   Code::Kind code_kind = info()->code_kind();
   return (code_kind == Code::WASM_FUNCTION ||
           code_kind == Code::WASM_TO_CAPI_FUNCTION ||
+          code_kind == Code::WASM_TO_PRELOAD_FUNCTION ||
           code_kind == Code::WASM_TO_JS_FUNCTION)
              ? StubCallMode::kCallWasmRuntimeStub
              : StubCallMode::kCallCodeObject;

@@ -513,6 +513,7 @@ StackFrame::Type StackFrame::ComputeType(const StackFrameIteratorBase* iterator,
         case wasm::WasmCode::kFunction:
           return WASM_COMPILED;
         case wasm::WasmCode::kWasmToCapiWrapper:
+        case wasm::WasmCode::kWasmToPreloadWrapper:
           return WASM_EXIT;
         case wasm::WasmCode::kWasmToJsWrapper:
           return WASM_TO_JS;
@@ -555,6 +556,7 @@ StackFrame::Type StackFrame::ComputeType(const StackFrameIteratorBase* iterator,
             return C_WASM_ENTRY;
           case Code::WASM_FUNCTION:
           case Code::WASM_TO_CAPI_FUNCTION:
+          case Code::WASM_TO_PRELOAD_FUNCTION:
           case Code::WASM_TO_JS_FUNCTION:
           case Code::WASM_INTERPRETER_ENTRY:
             // Never appear as on-heap {Code} objects.
@@ -886,7 +888,8 @@ void StandardFrame::IterateCompiledFrame(RootVisitor* v) const {
     safepoint_entry = table.FindEntry(inner_pointer);
     stack_slots = wasm_code->stack_slots();
     has_tagged_params = wasm_code->kind() != wasm::WasmCode::kFunction &&
-                        wasm_code->kind() != wasm::WasmCode::kWasmToCapiWrapper;
+                        wasm_code->kind() != wasm::WasmCode::kWasmToCapiWrapper &&
+                        wasm_code->kind() != wasm::WasmCode::kWasmToPreloadWrapper;
     tagged_parameter_slots = wasm_code->tagged_parameter_slots();
   } else {
     InnerPointerToCodeCache::InnerPointerToCodeCacheEntry* entry =
