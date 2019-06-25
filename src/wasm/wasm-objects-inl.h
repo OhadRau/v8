@@ -365,8 +365,8 @@ PRIMITIVE_ACCESSORS(WasmPreloadFunctionData, call_target, Address,
 PRIMITIVE_ACCESSORS(WasmPreloadFunctionData, embedder_data, void*,
                     kEmbedderDataOffset)
 ACCESSORS(WasmPreloadFunctionData, wrapper_code, Code, kWrapperCodeOffset)
-ACCESSORS(WasmPreloadFunctionData, serialized_signature, PodArray<wasm::ValueType>,
-          kSerializedSignatureOffset)
+ACCESSORS(WasmPreloadFunctionData, serialized_signature,
+          PodArray<wasm::ValueType>, kSerializedSignatureOffset)
 
 
 #undef OPTIONAL_ACCESSORS

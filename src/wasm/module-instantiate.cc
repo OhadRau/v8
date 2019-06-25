@@ -883,7 +883,8 @@ bool InstanceBuilder::ProcessImportedFunction(
     }
     case compiler::WasmImportCallKind::kWasmToPreload: {
       NativeModule* native_module = instance->module_object().native_module();
-      Address host_address = WasmPreloadFunction::cast(*value).GetHostCallTarget();
+      Address host_address =
+        WasmPreloadFunction::cast(*value).GetHostCallTarget();
       WasmCodeRefScope code_ref_scope;
       WasmCode* wasm_code = compiler::CompileWasmPreloadCallWrapper(
           isolate_->wasm_engine(), native_module, expected_sig, host_address);

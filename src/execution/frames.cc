@@ -888,8 +888,10 @@ void StandardFrame::IterateCompiledFrame(RootVisitor* v) const {
     safepoint_entry = table.FindEntry(inner_pointer);
     stack_slots = wasm_code->stack_slots();
     has_tagged_params = wasm_code->kind() != wasm::WasmCode::kFunction &&
-                        wasm_code->kind() != wasm::WasmCode::kWasmToCapiWrapper &&
-                        wasm_code->kind() != wasm::WasmCode::kWasmToPreloadWrapper;
+                        wasm_code->kind() !=
+                          wasm::WasmCode::kWasmToCapiWrapper &&
+                        wasm_code->kind() !=
+                          wasm::WasmCode::kWasmToPreloadWrapper;
     tagged_parameter_slots = wasm_code->tagged_parameter_slots();
   } else {
     InnerPointerToCodeCache::InnerPointerToCodeCacheEntry* entry =

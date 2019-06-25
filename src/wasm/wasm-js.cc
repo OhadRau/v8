@@ -663,6 +663,19 @@ void WebAssemblyValidate(const v8::FunctionCallbackInfo<v8::Value>& args) {
   return_value.Set(Boolean::New(isolate, validated));
 }
 
+// WebAssembly.preloads() -> Object
+void WebAssemblyPreloads(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  v8::Isolate* isolate = args.GetIsolate();
+  i::Isolate* i_isolate = reinterpret_cast<i::Isolate*>(isolate);
+  HandleScope scope(isolate);
+  ScheduledErrorThrower thrower(i_isolate, "WebAssembly.preloads()");
+
+  v8::ReturnValue<v8::Value> return_value = args.GetReturnValue();
+  i::Handle<i::JSObject> imports_handle(
+      i_isolate->wasm_native_imports(), i_isolate);
+  return_value.Set(Utils::ToLocal(imports_handle));
+}
+
 // new WebAssembly.Module(bytes) -> WebAssembly.Module
 void WebAssemblyModule(const v8::FunctionCallbackInfo<v8::Value>& args) {
   v8::Isolate* isolate = args.GetIsolate();
@@ -2266,6 +2279,11 @@ void WasmJs::Install(Isolate* isolate, bool exposed_on_global_object) {
     // Make all exported functions an instance of {Function}.
     Handle<Map> function_map = isolate->sloppy_function_without_prototype_map();
     context->set_wasm_exported_function_map(*function_map);
+  }
+
+  // Setup preloads
+  if (enabled_features.preloads) {
+    InstallFunc(isolate, webassembly, "preloads", WebAssemblyPreloads, 1);
   }
 
   // Setup errors

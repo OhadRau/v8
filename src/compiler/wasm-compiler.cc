@@ -5740,6 +5740,120 @@ class WasmWrapperGraphBuilder : public WasmGraphBuilder {
     if (ContainsInt64(sig_)) LowerInt64();
   }
 
+  // TODO(ohadrau): Change call wrapper to pass in the correct params
+  void BuildPreloadCallWrapper(Address address) {
+    // Store arguments on our stack, then align the stack for calling to C.
+    int param_bytes = 0;
+    for (wasm::ValueType type : sig_->parameters()) {
+      param_bytes += wasm::ValueTypes::MemSize(type);
+    }
+    int return_bytes = 0;
+    for (wasm::ValueType type : sig_->returns()) {
+      return_bytes += wasm::ValueTypes::MemSize(type);
+    }
+
+    int stack_slot_bytes = std::max(param_bytes, return_bytes);
+    Node* values = stack_slot_bytes == 0
+                       ? mcgraph()->IntPtrConstant(0)
+                       : graph()->NewNode(mcgraph()->machine()->StackSlot(
+                             stack_slot_bytes, kDoubleAlignment));
+
+    int offset = 0;
+    int param_count = static_cast<int>(sig_->parameter_count());
+    for (int i = 0; i < param_count; ++i) {
+      wasm::ValueType type = sig_->GetParam(i);
+      // Start from the parameter with index 1 to drop the instance_node.
+      // TODO(jkummerow): When a values is a reference type, we should pass it
+      // in a GC-safe way, not just as a raw pointer.
+      SetEffect(graph()->NewNode(GetSafeStoreOperator(offset, type), values,
+                                 Int32Constant(offset), Param(i + 1), Effect(),
+                                 Control()));
+      offset += wasm::ValueTypes::ElementSizeInBytes(type);
+    }
+    // The function is passed as the last parameter, after WASM arguments.
+    Node* function_node = Param(param_count + 1);
+    Node* shared = LOAD_RAW(
+        function_node,
+        wasm::ObjectAccess::SharedFunctionInfoOffsetInTaggedJSFunction(),
+        MachineType::TypeCompressedTagged());
+    Node* sfi_data = LOAD_RAW(
+        shared, SharedFunctionInfo::kFunctionDataOffset - kHeapObjectTag,
+        MachineType::TypeCompressedTagged());
+    Node* host_data = LOAD_RAW(
+        sfi_data, WasmPreloadFunctionData::kEmbedderDataOffset - kHeapObjectTag,
+        MachineType::Pointer());
+
+    // TODO(ohadrau): How do we create the context object?
+    Node *memoryBase = this->MemBuffer(0);
+
+    BuildModifyThreadInWasmFlag(false);
+    Node* isolate_root =
+        LOAD_INSTANCE_FIELD(IsolateRoot, MachineType::Pointer());
+    Node* fp_value = graph()->NewNode(mcgraph()->machine()->LoadFramePointer());
+    STORE_RAW(isolate_root, Isolate::c_entry_fp_offset(), fp_value,
+              MachineType::PointerRepresentation(), kNoWriteBarrier);
+
+    // TODO(jkummerow): Load the address from the {host_data}, and cache
+    // wrappers per signature.
+    const ExternalReference ref = ExternalReference::Create(address);
+    Node* function =
+        graph()->NewNode(mcgraph()->common()->ExternalConstant(ref));
+
+    // TODO(ohadrau): Replace the memory base address w/ v8::wasm::Context *ctx
+    // Results: Address results.
+    // Parameters: void *data, void *memoryBase, Address arguments.
+    MachineType host_sig_types[] = {
+        MachineType::Pointer(), MachineType::Pointer(), MachineType::Pointer(),
+        MachineType::Pointer()};
+    // size_t return_count, size_t parameter_count, const MachineType* reps
+    MachineSignature host_sig(1, 3, host_sig_types);
+    Node* return_value = BuildCCall(&host_sig, function, host_data, memoryBase,
+                                    values);
+
+    BuildModifyThreadInWasmFlag(true);
+
+    Node* exception_branch =
+        graph()->NewNode(mcgraph()->common()->Branch(BranchHint::kTrue),
+                         graph()->NewNode(mcgraph()->machine()->WordEqual(),
+                                          return_value, IntPtrConstant(0)),
+                         Control());
+    SetControl(
+        graph()->NewNode(mcgraph()->common()->IfFalse(), exception_branch));
+    WasmThrowDescriptor interface_descriptor;
+    auto call_descriptor = Linkage::GetStubCallDescriptor(
+        mcgraph()->zone(), interface_descriptor,
+        interface_descriptor.GetStackParameterCount(), CallDescriptor::kNoFlags,
+        Operator::kNoProperties, StubCallMode::kCallWasmRuntimeStub);
+    Node* call_target = mcgraph()->RelocatableIntPtrConstant(
+        wasm::WasmCode::kWasmRethrow, RelocInfo::WASM_STUB_CALL);
+    Node* throw_effect =
+        graph()->NewNode(mcgraph()->common()->Call(call_descriptor),
+                         call_target, return_value, Effect(), Control());
+    TerminateThrow(throw_effect, Control());
+
+    SetControl(
+        graph()->NewNode(mcgraph()->common()->IfTrue(), exception_branch));
+    DCHECK_LT(sig_->return_count(), wasm::kV8MaxWasmFunctionMultiReturns);
+    int return_count = static_cast<int>(sig_->return_count());
+    if (return_count == 0) {
+      Return(Int32Constant(0));
+    } else {
+      Node** returns = Buffer(return_count);
+      offset = 0;
+      for (int i = 0; i < return_count; ++i) {
+        wasm::ValueType type = sig_->GetReturn(i);
+        Node* val = SetEffect(
+            graph()->NewNode(GetSafeLoadOperator(offset, type), values,
+                             Int32Constant(offset), Effect(), Control()));
+        returns[i] = val;
+        offset += wasm::ValueTypes::ElementSizeInBytes(type);
+      }
+      Return(return_count, returns);
+    }
+
+    if (ContainsInt64(sig_)) LowerInt64();
+  }
+
   void BuildWasmInterpreterEntry(int func_index) {
     int param_count = static_cast<int>(sig_->parameter_count());
 
@@ -6291,10 +6405,10 @@ wasm::WasmCode* CompileWasmCapiCallWrapper(wasm::WasmEngine* wasm_engine,
 
 // TODO(ohadrau): Change the semantics of a preload
 wasm::WasmCode* CompileWasmPreloadCallWrapper(wasm::WasmEngine* wasm_engine,
-                                           wasm::NativeModule* native_module,
-                                           wasm::FunctionSig* sig,
-                                           Address address) {
-  TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("v8.wasm"), "CompileWasmCapiFunction");
+                                              wasm::NativeModule* native_module,
+                                              wasm::FunctionSig* sig,
+                                              Address address) {
+  TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("v8.wasm"), "CompilePreloadFunction");
 
   Zone zone(wasm_engine->allocator(), ZONE_NAME);
 
@@ -6323,25 +6437,25 @@ wasm::WasmCode* CompileWasmPreloadCallWrapper(wasm::WasmEngine* wasm_engine,
   builder.set_effect_ptr(&effect);
   builder.set_control_ptr(&control);
   builder.set_instance_node(builder.Param(wasm::kWasmInstanceParameterIndex));
-  builder.BuildCapiCallWrapper(address);
+  builder.BuildPreloadCallWrapper(address);
 
   // Run the compiler pipeline to generate machine code.
   CallDescriptor* call_descriptor =
       GetWasmCallDescriptor(&zone, sig, WasmGraphBuilder::kNoRetpoline,
-                            WasmCallKind::kWasmCapiFunction);
+                            WasmCallKind::kWasmPreloadFunction);
   if (mcgraph->machine()->Is32()) {
     call_descriptor = GetI32WasmCallDescriptor(&zone, call_descriptor);
   }
 
-  const char* debug_name = "WasmCapiCall";
+  const char* debug_name = "WasmPreloadCall";
   wasm::WasmCompilationResult result = Pipeline::GenerateCodeForWasmNativeStub(
-      wasm_engine, call_descriptor, mcgraph, Code::WASM_TO_CAPI_FUNCTION,
-      wasm::WasmCode::kWasmToCapiWrapper, debug_name,
+      wasm_engine, call_descriptor, mcgraph, Code::WASM_TO_PRELOAD_FUNCTION,
+      wasm::WasmCode::kWasmToPreloadWrapper, debug_name,
       WasmStubAssemblerOptions(), source_positions);
   std::unique_ptr<wasm::WasmCode> wasm_code = native_module->AddCode(
       wasm::kAnonymousFuncIndex, result.code_desc, result.frame_slot_count,
       result.tagged_parameter_slots, std::move(result.protected_instructions),
-      std::move(result.source_positions), wasm::WasmCode::kWasmToCapiWrapper,
+      std::move(result.source_positions), wasm::WasmCode::kWasmToPreloadWrapper,
       wasm::ExecutionTier::kNone);
   return native_module->PublishCode(std::move(wasm_code));
 }
@@ -6612,7 +6726,8 @@ CallDescriptor* GetWasmCallDescriptor(
   // The extra here is to accomodate the instance object as first parameter
   // and, when specified, the additional callable.
   bool extra_callable_param =
-      call_kind == kWasmImportWrapper || call_kind == kWasmCapiFunction || call_kind == kWasmPreloadFunction;
+      call_kind == kWasmImportWrapper || call_kind == kWasmCapiFunction ||
+      call_kind == kWasmPreloadFunction;
   int extra_params = extra_callable_param ? 2 : 1;
   LocationSignature::Builder locations(zone, fsig->return_count(),
                                        fsig->parameter_count() + extra_params);

@@ -242,7 +242,8 @@ class V8_EXPORT_PRIVATE CallDescriptor final
   bool IsWasmCapiFunction() const { return kind_ == kCallWasmCapiFunction; }
 
   // Returns {true} if this descriptor is a call to a Wasm preloaded function.
-  bool IsWasmPreloadFunction() const { return kind_ == kCallWasmPreloadFunction; }
+  bool IsWasmPreloadFunction() const
+    { return kind_ == kCallWasmPreloadFunction; }
 
   bool RequiresFrameAsIncoming() const {
     return IsCFunctionCall() || IsJSFunctionCall() || IsWasmFunctionCall();

@@ -127,7 +127,8 @@ wasm::WasmCode* CompileWasmCapiCallWrapper(wasm::WasmEngine*,
 // Compiles a host call wrapper, which allows WASM to call host functions.
 wasm::WasmCode* CompileWasmPreloadCallWrapper(wasm::WasmEngine*,
                                               wasm::NativeModule*,
-                                              wasm::FunctionSig*, Address address);
+                                              wasm::FunctionSig*,
+                                              Address address);
 
 // Creates a code object calling a wasm function with the given signature,
 // callable from JS.
@@ -618,7 +619,8 @@ class WasmGraphBuilder {
   TrapId GetTrapIdForTrap(wasm::TrapReason reason);
 };
 
-enum WasmCallKind { kWasmFunction, kWasmImportWrapper, kWasmCapiFunction, kWasmPreloadFunction };
+enum WasmCallKind { kWasmFunction, kWasmImportWrapper, kWasmCapiFunction,
+                    kWasmPreloadFunction };
 
 V8_EXPORT_PRIVATE CallDescriptor* GetWasmCallDescriptor(
     Zone* zone, wasm::FunctionSig* signature,

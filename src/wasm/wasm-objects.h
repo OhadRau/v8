@@ -305,7 +305,8 @@ class V8_EXPORT_PRIVATE WasmTableObject : public JSObject {
   static void UpdateDispatchTables(Isolate* isolate,
                                    Handle<WasmTableObject> table,
                                    int entry_index,
-                                   Handle<WasmPreloadFunction> preload_function);
+                                   Handle<WasmPreloadFunction>
+                                     preload_function);
 
   static void ClearDispatchTables(Isolate* isolate,
                                   Handle<WasmTableObject> table, int index);
@@ -766,7 +767,7 @@ class WasmPreloadFunctionData : public Struct {
   DECL_VERIFIER(WasmPreloadFunctionData)
 
   DEFINE_FIELD_OFFSET_CONSTANTS(HeapObject::kHeaderSize,
-                                TORQUE_GENERATED_WASM_PRELOAD_FUNCTION_DATA_FIELDS)
+      TORQUE_GENERATED_WASM_PRELOAD_FUNCTION_DATA_FIELDS)
 
   STATIC_ASSERT(kStartOfStrongFieldsOffset == kWrapperCodeOffset);
   using BodyDescriptor = FlexibleBodyDescriptor<kStartOfStrongFieldsOffset>;
