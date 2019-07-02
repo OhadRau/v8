@@ -2502,6 +2502,7 @@ MaybeLocal<Function> ScriptCompiler::CompileFunctionInContext(
   i::ScriptData* script_data = nullptr;
   if (options == kConsumeCodeCache) {
     DCHECK(source->cached_data);
+    printf("[WASM-PL] Create script data (length = %d)\n", source->cached_data->length);
     // ScriptData takes care of pointer-aligning the data.
     script_data = new i::ScriptData(source->cached_data->data,
                                     source->cached_data->length);

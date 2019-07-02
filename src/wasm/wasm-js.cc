@@ -671,9 +671,11 @@ void WebAssemblyPreloads(const v8::FunctionCallbackInfo<v8::Value>& args) {
   ScheduledErrorThrower thrower(i_isolate, "WebAssembly.preloads()");
 
   v8::ReturnValue<v8::Value> return_value = args.GetReturnValue();
-  i::Handle<i::JSObject> imports_handle(
-      i_isolate->wasm_native_imports(), i_isolate);
-  return_value.Set(Utils::ToLocal(imports_handle));
+  Eternal<i::JSObject> imports = i_isolate->wasm_native_imports();
+  Local<i::JSObject> result = imports.Get(isolate);
+  i::Handle<i::JSObject> real_result =
+      i::Handle<i::JSObject>(reinterpret_cast<i::Address*>(*result));
+  return_value.Set(Utils::ToLocal(real_result));
 }
 
 // new WebAssembly.Module(bytes) -> WebAssembly.Module

@@ -834,6 +834,7 @@ bool InstanceBuilder::ProcessImportedFunction(
     Handle<WasmInstanceObject> instance, int import_index, int func_index,
     Handle<String> module_name, Handle<String> import_name,
     Handle<Object> value) {
+  puts("[WASM-PL] Processing imported function");
   // Function imports must be callable.
   if (!value->IsCallable()) {
     ReportLinkError("function import requires a callable", import_index,
@@ -882,21 +883,30 @@ bool InstanceBuilder::ProcessImportedFunction(
       break;
     }
     case compiler::WasmImportCallKind::kWasmToPreload: {
+      puts("[WASM-PL] Acquiring native module");
       NativeModule* native_module = instance->module_object().native_module();
+      puts("[WASM-PL] Getting call target");
       Address host_address =
         WasmPreloadFunction::cast(*value).GetHostCallTarget();
       WasmCodeRefScope code_ref_scope;
+      puts("[WASM-PL] Compiling call wrapper");
       WasmCode* wasm_code = compiler::CompileWasmPreloadCallWrapper(
-          isolate_->wasm_engine(), native_module, expected_sig, host_address);
+          isolate_->wasm_engine(), native_module, expected_sig, host_address,
+          instance->memory_start());
+      wasm_code->Print("[WASM-PL]");
+      puts("[WASM-PL] Incrementing counters");
       isolate_->counters()->wasm_generated_code_size()->Increment(
           wasm_code->instructions().length());
       isolate_->counters()->wasm_reloc_size()->Increment(
           wasm_code->reloc_info().length());
 
+      puts("[WASM-PL] Getting function entry");
       ImportedFunctionEntry entry(instance, func_index);
       // We re-use the SetWasmToJs infrastructure because it passes the
       // callable to the wrapper, which we need to get the function data.
+      puts("[WASM-PL] Setting WasmToJs");
       entry.SetWasmToJs(isolate_, js_receiver, wasm_code);
+      puts("[WASM-PL] Compiled preload");
       break;
     }
     default: {
@@ -1239,7 +1249,8 @@ void InstanceBuilder::CompileImportWrappers(
         compiler::GetWasmImportCallKind(js_receiver, sig, enabled_.bigint);
     if (kind == compiler::WasmImportCallKind::kWasmToWasm ||
         kind == compiler::WasmImportCallKind::kLinkError ||
-        kind == compiler::WasmImportCallKind::kWasmToCapi) {
+        kind == compiler::WasmImportCallKind::kWasmToCapi ||
+        kind == compiler::WasmImportCallKind::kWasmToPreload) {
       continue;
     }
     WasmImportWrapperCache::CacheKey key(kind, sig);
@@ -1273,6 +1284,7 @@ void InstanceBuilder::CompileImportWrappers(
 // order, loading them from the {ffi_} object. Returns the number of imported
 // functions.
 int InstanceBuilder::ProcessImports(Handle<WasmInstanceObject> instance) {
+  puts("[WASM-PL] Processing imports");
   int num_imported_functions = 0;
   int num_imported_tables = 0;
 
@@ -1295,6 +1307,7 @@ int InstanceBuilder::ProcessImports(Handle<WasmInstanceObject> instance) {
                                      import_name, value)) {
           return -1;
         }
+        puts("[WASM-PL] Processed imported function");
         num_imported_functions++;
         break;
       }

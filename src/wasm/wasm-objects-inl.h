@@ -342,15 +342,6 @@ ACCESSORS(WasmCapiFunctionData, wrapper_code, Code, kWrapperCodeOffset)
 ACCESSORS(WasmCapiFunctionData, serialized_signature, PodArray<wasm::ValueType>,
           kSerializedSignatureOffset)
 
-// WasmDebugInfo
-ACCESSORS(WasmDebugInfo, wasm_instance, WasmInstanceObject, kInstanceOffset)
-ACCESSORS(WasmDebugInfo, interpreter_handle, Object, kInterpreterHandleOffset)
-OPTIONAL_ACCESSORS(WasmDebugInfo, locals_names, FixedArray, kLocalsNamesOffset)
-OPTIONAL_ACCESSORS(WasmDebugInfo, c_wasm_entries, FixedArray,
-                   kCWasmEntriesOffset)
-OPTIONAL_ACCESSORS(WasmDebugInfo, c_wasm_entry_map, Managed<wasm::SignatureMap>,
-                   kCWasmEntryMapOffset)
-
 // WasmPreloadFunction
 WasmPreloadFunction::WasmPreloadFunction(Address ptr) : JSFunction(ptr) {
   SLOW_DCHECK(IsWasmPreloadFunction(*this));
@@ -368,6 +359,14 @@ ACCESSORS(WasmPreloadFunctionData, wrapper_code, Code, kWrapperCodeOffset)
 ACCESSORS(WasmPreloadFunctionData, serialized_signature,
           PodArray<wasm::ValueType>, kSerializedSignatureOffset)
 
+// WasmDebugInfo
+ACCESSORS(WasmDebugInfo, wasm_instance, WasmInstanceObject, kInstanceOffset)
+ACCESSORS(WasmDebugInfo, interpreter_handle, Object, kInterpreterHandleOffset)
+OPTIONAL_ACCESSORS(WasmDebugInfo, locals_names, FixedArray, kLocalsNamesOffset)
+OPTIONAL_ACCESSORS(WasmDebugInfo, c_wasm_entries, FixedArray,
+                   kCWasmEntriesOffset)
+OPTIONAL_ACCESSORS(WasmDebugInfo, c_wasm_entry_map, Managed<wasm::SignatureMap>,
+                   kCWasmEntryMapOffset)
 
 #undef OPTIONAL_ACCESSORS
 #undef READ_PRIMITIVE_FIELD

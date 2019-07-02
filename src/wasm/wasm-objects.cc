@@ -1131,8 +1131,9 @@ void WasmTableObject::UpdateDispatchTables(
         instance->module_object().native_module();
     Address host_address = preload_function->GetHostCallTarget();
     wasm::WasmCodeRefScope code_ref_scope;
-    wasm::WasmCode* wasm_code = compiler::CompileWasmCapiCallWrapper(
-        isolate->wasm_engine(), native_module, &sig, host_address);
+    wasm::WasmCode* wasm_code = compiler::CompileWasmPreloadCallWrapper(
+        isolate->wasm_engine(), native_module, &sig, host_address,
+        instance->memory_start());
     isolate->counters()->wasm_generated_code_size()->Increment(
         wasm_code->instructions().length());
     isolate->counters()->wasm_reloc_size()->Increment(
@@ -1555,7 +1556,8 @@ void ImportedFunctionEntry::SetWasmToJs(
             instance_->ptr(), index_, callable->ptr(),
             wasm_to_js_wrapper->instructions().begin());
   DCHECK(wasm_to_js_wrapper->kind() == wasm::WasmCode::kWasmToJsWrapper ||
-         wasm_to_js_wrapper->kind() == wasm::WasmCode::kWasmToCapiWrapper);
+         wasm_to_js_wrapper->kind() == wasm::WasmCode::kWasmToCapiWrapper ||
+         wasm_to_js_wrapper->kind() == wasm::WasmCode::kWasmToPreloadWrapper);
   Handle<Tuple2> tuple =
       isolate->factory()->NewTuple2(instance_, callable, AllocationType::kOld);
   instance_->imported_function_refs().set(index_, *tuple);
@@ -2173,9 +2175,6 @@ Handle<WasmPreloadFunction> WasmPreloadFunction::New(
   fun_data->set_call_target(call_target);
   fun_data->set_embedder_data(embedder_data);
   fun_data->set_serialized_signature(*serialized_signature);
-  // TODO(jkummerow): Install a JavaScript wrapper. For now, calling
-  // these functions directly is unsupported; they can only be called
-  // from Wasm code.
   fun_data->set_wrapper_code(isolate->builtins()->builtin(Builtins::kIllegal));
   Handle<SharedFunctionInfo> shared =
       isolate->factory()->NewSharedFunctionInfoForWasmPreloadFunction(fun_data);

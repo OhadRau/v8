@@ -5741,8 +5741,9 @@ class WasmWrapperGraphBuilder : public WasmGraphBuilder {
   }
 
   // TODO(ohadrau): Change call wrapper to pass in the correct params
-  void BuildPreloadCallWrapper(Address address) {
+  void BuildPreloadCallWrapper(Address address, i::byte *memory_start) {
     // Store arguments on our stack, then align the stack for calling to C.
+    puts("[WASM-PL] Counting params/return");
     int param_bytes = 0;
     for (wasm::ValueType type : sig_->parameters()) {
       param_bytes += wasm::ValueTypes::MemSize(type);
@@ -5752,12 +5753,14 @@ class WasmWrapperGraphBuilder : public WasmGraphBuilder {
       return_bytes += wasm::ValueTypes::MemSize(type);
     }
 
+    puts("[WASM-PL] Creating stack slots");
     int stack_slot_bytes = std::max(param_bytes, return_bytes);
     Node* values = stack_slot_bytes == 0
                        ? mcgraph()->IntPtrConstant(0)
                        : graph()->NewNode(mcgraph()->machine()->StackSlot(
                              stack_slot_bytes, kDoubleAlignment));
 
+    puts("[WASM-PL] Copying params");
     int offset = 0;
     int param_count = static_cast<int>(sig_->parameter_count());
     for (int i = 0; i < param_count; ++i) {
@@ -5770,6 +5773,12 @@ class WasmWrapperGraphBuilder : public WasmGraphBuilder {
                                  Control()));
       offset += wasm::ValueTypes::ElementSizeInBytes(type);
     }
+
+    puts("[WASM-PL] Acquiring memory offset");
+    // TODO(ohadrau): How should we create the context object?
+    Node* memoryBase = Int64Constant((size_t) memory_start);
+
+    puts("[WASM-PL] Passing function");
     // The function is passed as the last parameter, after WASM arguments.
     Node* function_node = Param(param_count + 1);
     Node* shared = LOAD_RAW(
@@ -5783,9 +5792,7 @@ class WasmWrapperGraphBuilder : public WasmGraphBuilder {
         sfi_data, WasmPreloadFunctionData::kEmbedderDataOffset - kHeapObjectTag,
         MachineType::Pointer());
 
-    // TODO(ohadrau): How do we create the context object?
-    Node *memoryBase = this->MemBuffer(0);
-
+    puts("[WASM-PL] Getting frame pointer");
     BuildModifyThreadInWasmFlag(false);
     Node* isolate_root =
         LOAD_INSTANCE_FIELD(IsolateRoot, MachineType::Pointer());
@@ -5793,12 +5800,14 @@ class WasmWrapperGraphBuilder : public WasmGraphBuilder {
     STORE_RAW(isolate_root, Isolate::c_entry_fp_offset(), fp_value,
               MachineType::PointerRepresentation(), kNoWriteBarrier);
 
+    puts("[WASM-PL] Creating external reference");
     // TODO(jkummerow): Load the address from the {host_data}, and cache
     // wrappers per signature.
     const ExternalReference ref = ExternalReference::Create(address);
     Node* function =
         graph()->NewNode(mcgraph()->common()->ExternalConstant(ref));
 
+    puts("[WASM-PL] Building signature");
     // TODO(ohadrau): Replace the memory base address w/ v8::wasm::Context *ctx
     // Results: Address results.
     // Parameters: void *data, void *memoryBase, Address arguments.
@@ -5807,11 +5816,13 @@ class WasmWrapperGraphBuilder : public WasmGraphBuilder {
         MachineType::Pointer()};
     // size_t return_count, size_t parameter_count, const MachineType* reps
     MachineSignature host_sig(1, 3, host_sig_types);
+    puts("[WASM-PL] Building C Call");
     Node* return_value = BuildCCall(&host_sig, function, host_data, memoryBase,
                                     values);
 
     BuildModifyThreadInWasmFlag(true);
 
+    puts("[WASM-PL] Exception branch");
     Node* exception_branch =
         graph()->NewNode(mcgraph()->common()->Branch(BranchHint::kTrue),
                          graph()->NewNode(mcgraph()->machine()->WordEqual(),
@@ -5831,6 +5842,7 @@ class WasmWrapperGraphBuilder : public WasmGraphBuilder {
                          call_target, return_value, Effect(), Control());
     TerminateThrow(throw_effect, Control());
 
+    puts("[WASM-PL] Checking returns");
     SetControl(
         graph()->NewNode(mcgraph()->common()->IfTrue(), exception_branch));
     DCHECK_LT(sig_->return_count(), wasm::kV8MaxWasmFunctionMultiReturns);
@@ -6407,11 +6419,14 @@ wasm::WasmCode* CompileWasmCapiCallWrapper(wasm::WasmEngine* wasm_engine,
 wasm::WasmCode* CompileWasmPreloadCallWrapper(wasm::WasmEngine* wasm_engine,
                                               wasm::NativeModule* native_module,
                                               wasm::FunctionSig* sig,
-                                              Address address) {
+                                              Address address,
+                                              i::byte *memory_start) {
   TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("v8.wasm"), "CompilePreloadFunction");
 
+  puts("[WASM-PL] Creating zone");
   Zone zone(wasm_engine->allocator(), ZONE_NAME);
 
+  puts("[WASM-PL] Building graph");
   // TODO(jkummerow): Extract common code into helper method.
   SourcePositionTable* source_positions = nullptr;
   MachineGraph* mcgraph = new (&zone) MachineGraph(
@@ -6423,10 +6438,12 @@ wasm::WasmCode* CompileWasmPreloadCallWrapper(wasm::WasmEngine* wasm_engine,
   JSGraph jsgraph(nullptr, mcgraph->graph(), mcgraph->common(), nullptr,
                   nullptr, mcgraph->machine());
 
+  puts("[WASM-PL] Creating graph builder");
   WasmWrapperGraphBuilder builder(&zone, &jsgraph, sig, source_positions,
                                   StubCallMode::kCallWasmRuntimeStub,
                                   native_module->enabled_features());
 
+  puts("[WASM-PL] Setting up graph start");
   // Set up the graph start.
   int param_count = static_cast<int>(sig->parameter_count()) +
                     1 /* offset for first parameter index being -1 */ +
@@ -6437,8 +6454,10 @@ wasm::WasmCode* CompileWasmPreloadCallWrapper(wasm::WasmEngine* wasm_engine,
   builder.set_effect_ptr(&effect);
   builder.set_control_ptr(&control);
   builder.set_instance_node(builder.Param(wasm::kWasmInstanceParameterIndex));
-  builder.BuildPreloadCallWrapper(address);
+  puts("[WASM-PL] Building call wrapper");
+  builder.BuildPreloadCallWrapper(address, memory_start);
 
+  puts("[WASM-PL] Creating call descriptor");
   // Run the compiler pipeline to generate machine code.
   CallDescriptor* call_descriptor =
       GetWasmCallDescriptor(&zone, sig, WasmGraphBuilder::kNoRetpoline,
@@ -6447,6 +6466,7 @@ wasm::WasmCode* CompileWasmPreloadCallWrapper(wasm::WasmEngine* wasm_engine,
     call_descriptor = GetI32WasmCallDescriptor(&zone, call_descriptor);
   }
 
+  puts("[WASM-PL] Generating code");
   const char* debug_name = "WasmPreloadCall";
   wasm::WasmCompilationResult result = Pipeline::GenerateCodeForWasmNativeStub(
       wasm_engine, call_descriptor, mcgraph, Code::WASM_TO_PRELOAD_FUNCTION,
@@ -6457,6 +6477,7 @@ wasm::WasmCode* CompileWasmPreloadCallWrapper(wasm::WasmEngine* wasm_engine,
       result.tagged_parameter_slots, std::move(result.protected_instructions),
       std::move(result.source_positions), wasm::WasmCode::kWasmToPreloadWrapper,
       wasm::ExecutionTier::kNone);
+  puts("[WASM-PL] Publishing code");
   return native_module->PublishCode(std::move(wasm_code));
 }
 

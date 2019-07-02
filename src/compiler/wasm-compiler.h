@@ -128,7 +128,8 @@ wasm::WasmCode* CompileWasmCapiCallWrapper(wasm::WasmEngine*,
 wasm::WasmCode* CompileWasmPreloadCallWrapper(wasm::WasmEngine*,
                                               wasm::NativeModule*,
                                               wasm::FunctionSig*,
-                                              Address address);
+                                              Address address,
+                                              i::byte* memory_start);
 
 // Creates a code object calling a wasm function with the given signature,
 // callable from JS.

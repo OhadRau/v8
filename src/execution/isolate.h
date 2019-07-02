@@ -34,7 +34,6 @@
 #include "src/runtime/runtime.h"
 #include "src/strings/unicode.h"
 #include "src/utils/allocation.h"
-#include "src/api/api-wasm.h"
 
 #ifdef V8_INTL_SUPPORT
 #include "unicode/uversion.h"  // Define U_ICU_NAMESPACE.
@@ -403,7 +402,7 @@ using DebugObjectCache = std::vector<Handle<HeapObject>>;
   V(ExtensionCallback, wasm_instance_callback, &NoExtension)                   \
   V(WasmStreamingCallback, wasm_streaming_callback, nullptr)                   \
   V(WasmThreadsEnabledCallback, wasm_threads_enabled_callback, nullptr)        \
-  V(JSObject, wasm_native_imports, JSObject())                                 \
+  V(Eternal<JSObject>, wasm_native_imports, Eternal<JSObject>())               \
   /* State for Relocatable. */                                                 \
   V(Relocatable*, relocatable_top, nullptr)                                    \
   V(DebugObjectCache*, string_stream_debug_object_cache, nullptr)              \
