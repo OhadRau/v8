@@ -26,17 +26,15 @@ size_t Memory::size() { return pages_ * PAGE_SIZE; }
 size_t Memory::pages() { return pages_; }
 uint8_t* Memory::data() { return data_; }
 
-Context::Context(Memory *memory) {
+Context::Context(Memory* memory) {
   this->isolate = Isolate::GetCurrent();
   this->memory = memory;
 }
 
-Context::Context(Memory *memory, Isolate *isolate) {
+Context::Context(Memory* memory, Isolate* isolate) {
   this->isolate = isolate;
   this->memory = memory;
 }
-
-Context::~Context() {}
 
 Val::Val(ValKind kind, value value) : kind_(kind), value_(value) {}
 
@@ -44,13 +42,17 @@ Val::Val(int32_t i) : kind_(I32) { value_.i32 = i; }
 Val::Val(int64_t i) : kind_(I64) { value_.i64 = i; }
 Val::Val(float i) : kind_(F32) { value_.f32 = i; }
 Val::Val(double i) : kind_(F64) { value_.f64 = i; }
-Val::Val(void *r) : kind_(ANYREF) { value_.ref = r; }
+Val::Val(void* r) : kind_(ANYREF) { value_.ref = r; }
 
-ValKind Val::kind() { return kind_; }
-int32_t Val::i32() { assert(kind_ == I32); return value_.i32; }
-int64_t Val::i64() { assert(kind_ == I64); return value_.i64; }
-float Val::f32() { assert(kind_ == F32); return value_.f32; }
-double Val::f64() { assert(kind_ == F64); return value_.f64; }
+ValKind Val::kind() const { return kind_; }
+int32_t Val::i32() const { assert(kind_ == I32); return value_.i32; }
+int64_t Val::i64() const { assert(kind_ == I64); return value_.i64; }
+float Val::f32() const { assert(kind_ == F32); return value_.f32; }
+double Val::f64() const { assert(kind_ == F64); return value_.f64; }
+void* Val::ref() const {
+  assert(kind_ == ANYREF || kind_ == FUNCREF);
+  return value_.ref;
+}
 
 FuncType::FuncType(
   std::vector<ValKind> params, std::vector<ValKind> results
@@ -85,6 +87,108 @@ i::wasm::ValueType wasm_valtype_to_v8(ValKind type) {
       // TODO(wasm+): support new value types
       UNREACHABLE();
   }
+}
+
+i::Address FuncData::v8_callback(
+  void* data, i::Address argv,
+  size_t memoryPages, uint8_t* memoryBase
+) {
+  FuncData* self = reinterpret_cast<FuncData*>(data);
+  i::Isolate* isolate = self->isolate;
+  puts("[WASM-PL] Got self + isolate");
+
+  const std::vector<ValKind>& param_types = self->type->params();
+  const std::vector<ValKind>& result_types = self->type->results();
+  puts("[WASM-PL] Got param/result types");
+
+  int num_param_types = static_cast<int>(param_types.size());
+  int num_result_types = static_cast<int>(result_types.size());
+
+  std::unique_ptr<Val[]> params(new Val[num_param_types]);
+  std::unique_ptr<Val[]> results(new Val[num_result_types]);
+  i::Address p = argv;
+  for (int i = 0; i < num_param_types; ++i) {
+    switch (param_types[i]) {
+      case I32:
+        params[i] = Val(i::ReadUnalignedValue<int32_t>(p));
+        p += 4;
+        break;
+      case I64:
+        params[i] = Val(i::ReadUnalignedValue<int64_t>(p));
+        p += 8;
+        break;
+      case F32:
+        params[i] = Val(i::ReadUnalignedValue<float>(p));
+        p += 4;
+        break;
+      case F64:
+        params[i] = Val(i::ReadUnalignedValue<double>(p));
+        p += 8;
+        break;
+      case ANYREF:
+      case FUNCREF: {
+        i::Address raw = i::ReadUnalignedValue<i::Address>(p);
+        p += sizeof(raw);
+        if (raw == i::kNullAddress) {
+          params[i] = Val(nullptr);
+        } else {
+          i::JSReceiver raw_obj = i::JSReceiver::cast(i::Object(raw));
+          i::Handle<i::JSReceiver> obj(raw_obj, raw_obj.GetIsolate());
+          params[i] = Val(reinterpret_cast<void*>(obj->address()));
+        }
+        break;
+      }
+    }
+  }
+  puts("[WASM-PL] Got params");
+
+  const Memory* memory = new Memory(memoryPages, memoryBase);
+  self->callback(memory, params.get(), results.get());
+  puts("[WASM-PL] Called callback");
+
+  if (isolate->has_scheduled_exception()) {
+    isolate->PromoteScheduledException();
+  }
+  if (isolate->has_pending_exception()) {
+    i::Object ex = isolate->pending_exception();
+    isolate->clear_pending_exception();
+    return ex.ptr();
+  }
+  puts("[WASM-PL] Checked pending exceptions");
+
+  p = argv;
+  for (int i = 0; i < num_result_types; ++i) {
+    switch (result_types[i]) {
+      case I32:
+        i::WriteUnalignedValue(p, results[i].i32());
+        p += 4;
+        break;
+      case I64:
+        i::WriteUnalignedValue(p, results[i].i64());
+        p += 8;
+        break;
+      case F32:
+        i::WriteUnalignedValue(p, results[i].f32());
+        p += 4;
+        break;
+      case F64:
+        i::WriteUnalignedValue(p, results[i].f64());
+        p += 8;
+        break;
+      case ANYREF:
+      case FUNCREF: {
+        if (results[i].ref() == nullptr) {
+          i::WriteUnalignedValue(p, i::kNullAddress);
+        } else {
+          i::WriteUnalignedValue(p, results[i].ref());
+        }
+        p += sizeof(i::Address);
+        break;
+      }
+    }
+  }
+  puts("[WASM-PL] Got results");
+  return i::kNullAddress;
 }
 
 // TODO(ohadrau): Clean up so that we're not maintaining 2 copies of this
@@ -137,7 +241,7 @@ void PreloadNative(Isolate* isolate,
 
   Local<i::JSObject> imports_local = imports.Get(isolate);
   i::Handle<i::JSObject> imports_handle =
-    i::Handle<i::JSObject>(reinterpret_cast<i::Address*>(*imports_local));
+      i::Handle<i::JSObject>(reinterpret_cast<i::Address*>(*imports_local));
 
   i::Handle<i::String> module_str =
       i_isolate->factory()->NewStringFromAsciiChecked(module_name);
@@ -159,10 +263,18 @@ void PreloadNative(Isolate* isolate,
   }
   puts("[WASM-PL] Create callback");
   // TODO(ohadrau): Is this the right embedder data to pass in?
+  FuncData* data = new FuncData(i_isolate, import->type());;
   i::Handle<i::WasmPreloadFunction> callback =
+      i::WasmPreloadFunction::New(
+        i_isolate, reinterpret_cast<i::Address>(&FuncData::v8_callback),
+        data, Serialize(i_isolate, import->type()));
+  /*i::Handle<i::WasmPreloadFunction> callback =
     i::WasmPreloadFunction::New(
       i_isolate, reinterpret_cast<i::Address>(import->callback()),
       nullptr, Serialize(i_isolate, import->type()));
+  i::Handle<i::WasmCapiFunction> function = i::WasmCapiFunction::New(
+      isolate, reinterpret_cast<i::Address>(&FuncData::v8_callback), data,
+      SignatureHelper::Serialize(isolate, data->type.get()));*/
   IGNORE(i::Object::SetProperty(i_isolate, module_obj, name_str, callback));
 
   puts("[WASM-PL] Update native imports");

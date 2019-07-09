@@ -1512,7 +1512,8 @@ CodeGenerator::CodeGenResult CodeGenerator::AssembleArchInstruction(
       int const num_parameters = MiscField::decode(instr->opcode());
       Label return_location;
       // Put the return address in a stack slot.
-      if (linkage()->GetIncomingDescriptor()->IsWasmCapiFunction()) {
+      if (linkage()->GetIncomingDescriptor()->IsWasmCapiFunction() ||
+          linkage()->GetIncomingDescriptor()->IsWasmPreloadFunction()) {
         // Put the return address in a stack slot.
         __ larl(r0, &return_location);
         __ StoreP(r0, MemOperand(fp, WasmExitFrameConstants::kCallingPCOffset));
@@ -3039,7 +3040,8 @@ void CodeGenerator::AssembleConstructFrame() {
       if (call_descriptor->IsWasmFunctionCall()) {
         __ Push(kWasmInstanceRegister);
       } else if (call_descriptor->IsWasmImportWrapper() ||
-                 call_descriptor->IsWasmCapiFunction()) {
+                 call_descriptor->IsWasmCapiFunction() ||
+                 call_descriptor->IsWasmPreloadFunction()) {
         // WASM import wrappers are passed a tuple in the place of the instance.
         // Unpack the tuple into the instance and the target callable.
         // This must be done here in the codegen because it cannot be expressed
@@ -3049,7 +3051,8 @@ void CodeGenerator::AssembleConstructFrame() {
         __ LoadP(kWasmInstanceRegister,
                  FieldMemOperand(kWasmInstanceRegister, Tuple2::kValue1Offset));
         __ Push(kWasmInstanceRegister);
-        if (call_descriptor->IsWasmCapiFunction()) {
+        if (call_descriptor->IsWasmCapiFunction() ||
+            call_descriptor->IsWasmPreloadFunction()) {
           // Reserve space for saving the PC later.
           __ lay(sp, MemOperand(sp, -kSystemPointerSize));
         }

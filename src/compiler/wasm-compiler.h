@@ -129,6 +129,7 @@ wasm::WasmCode* CompileWasmPreloadCallWrapper(wasm::WasmEngine*,
                                               wasm::NativeModule*,
                                               wasm::FunctionSig*,
                                               Address address,
+                                              size_t memory_size,
                                               i::byte* memory_start);
 
 // Creates a code object calling a wasm function with the given signature,

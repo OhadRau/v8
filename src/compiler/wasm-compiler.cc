@@ -5741,7 +5741,11 @@ class WasmWrapperGraphBuilder : public WasmGraphBuilder {
   }
 
   // TODO(ohadrau): Change call wrapper to pass in the correct params
-  void BuildPreloadCallWrapper(Address address, i::byte *memory_start) {
+  void BuildPreloadCallWrapper(
+    Address address,
+    size_t memory_size,
+    i::byte *memory_start
+  ) {
     // Store arguments on our stack, then align the stack for calling to C.
     puts("[WASM-PL] Counting params/return");
     int param_bytes = 0;
@@ -5776,6 +5780,7 @@ class WasmWrapperGraphBuilder : public WasmGraphBuilder {
 
     puts("[WASM-PL] Acquiring memory offset");
     // TODO(ohadrau): How should we create the context object?
+    Node* memoryPages = Int64Constant(memory_size);
     Node* memoryBase = Int64Constant((size_t) memory_start);
 
     puts("[WASM-PL] Passing function");
@@ -5810,15 +5815,15 @@ class WasmWrapperGraphBuilder : public WasmGraphBuilder {
     puts("[WASM-PL] Building signature");
     // TODO(ohadrau): Replace the memory base address w/ v8::wasm::Context *ctx
     // Results: Address results.
-    // Parameters: void *data, void *memoryBase, Address arguments.
+    // Parameters: void *data, Address args, size_t memorySize, void* memoryBase
     MachineType host_sig_types[] = {
         MachineType::Pointer(), MachineType::Pointer(), MachineType::Pointer(),
-        MachineType::Pointer()};
+        MachineType::Pointer(), MachineType::Pointer()};
     // size_t return_count, size_t parameter_count, const MachineType* reps
-    MachineSignature host_sig(1, 3, host_sig_types);
+    MachineSignature host_sig(1, 4, host_sig_types);
     puts("[WASM-PL] Building C Call");
-    Node* return_value = BuildCCall(&host_sig, function, host_data, memoryBase,
-                                    values);
+    Node* return_value = BuildCCall(&host_sig, function, host_data, values,
+                                    memoryPages, memoryBase);
 
     BuildModifyThreadInWasmFlag(true);
 
@@ -6420,6 +6425,7 @@ wasm::WasmCode* CompileWasmPreloadCallWrapper(wasm::WasmEngine* wasm_engine,
                                               wasm::NativeModule* native_module,
                                               wasm::FunctionSig* sig,
                                               Address address,
+                                              size_t memory_size,
                                               i::byte *memory_start) {
   TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("v8.wasm"), "CompilePreloadFunction");
 
@@ -6455,7 +6461,7 @@ wasm::WasmCode* CompileWasmPreloadCallWrapper(wasm::WasmEngine* wasm_engine,
   builder.set_control_ptr(&control);
   builder.set_instance_node(builder.Param(wasm::kWasmInstanceParameterIndex));
   puts("[WASM-PL] Building call wrapper");
-  builder.BuildPreloadCallWrapper(address, memory_start);
+  builder.BuildPreloadCallWrapper(address, memory_size, memory_start);
 
   puts("[WASM-PL] Creating call descriptor");
   // Run the compiler pipeline to generate machine code.

@@ -22,11 +22,10 @@ class V8_EXPORT Memory {
 
 class V8_EXPORT Context {
  public:
-  explicit Context(Memory *memory);
-  Context(Memory *memory, Isolate *isolate);
-  ~Context();
-  Memory *memory;
-  Isolate *isolate;
+  explicit Context(Memory* memory);
+  Context(Memory* memory, Isolate* isolate);
+  Memory* memory;
+  Isolate* isolate;
 };
 
 enum V8_EXPORT ValKind : uint8_t {
@@ -45,13 +44,14 @@ class V8_EXPORT Val {
   explicit Val(int64_t i);
   explicit Val(float i);
   explicit Val(double i);
-  explicit Val(void *r);
+  explicit Val(void* r);
 
-  ValKind kind();
-  int32_t i32();
-  int64_t i64();
-  float f32();
-  double f64();
+  ValKind kind() const;
+  int32_t i32() const;
+  int64_t i64() const;
+  float f32() const;
+  double f64() const;
+  void* ref() const;
 };
 
 class V8_EXPORT FuncType {
@@ -65,7 +65,7 @@ class V8_EXPORT FuncType {
 class V8_EXPORT Func {
  public:
   // TODO(ohadrau): Specify a better return value (Trap)
-  using callbackType = void *(*)(const Memory*, const Val[], Val[]);
+  using callbackType = void (*)(const Memory*, const Val[], Val[]);
 
   Func(const FuncType*, callbackType);
 

@@ -28,11 +28,10 @@ class Memory {
 
 class Context {
  public:
-  explicit Context(Memory *memory);
-  Context(Memory *memory, v8::Isolate *isolate);
-  ~Context();
-  Memory *memory;
-  v8::Isolate *isolate;
+  explicit Context(Memory* memory);
+  Context(Memory* memory, v8::Isolate* isolate);
+  Memory* memory;
+  v8::Isolate* isolate;
 };
 
 enum ValKind : uint8_t {
@@ -53,7 +52,7 @@ class Val {
     int64_t i64;
     float f32;
     double f64;
-    void *ref;
+    void* ref;
   } value_;
 
   Val(ValKind kind, value value);
@@ -64,13 +63,14 @@ class Val {
   explicit Val(int64_t i);
   explicit Val(float i);
   explicit Val(double i);
-  explicit Val(void *r);
+  explicit Val(void* r);
 
-  ValKind kind();
-  int32_t i32();
-  int64_t i64();
-  float f32();
-  double f64();
+  ValKind kind() const;
+  int32_t i32() const;
+  int64_t i64() const;
+  float f32() const;
+  double f64() const;
+  void* ref() const;
 };
 
 class FuncType {
@@ -84,8 +84,9 @@ class FuncType {
 };
 
 class Func {
+  friend struct FuncData;
   // TODO(ohadrau): Specify a better return value (Trap)
-  using callbackType = void *(*)(const Memory*, const Val[], Val[]);
+  using callbackType = void (*)(const Memory*, const Val[], Val[]);
  private:
   const FuncType* type_;
   callbackType callback_;
@@ -94,6 +95,22 @@ class Func {
 
   const FuncType* type();
   callbackType callback();
+};
+
+struct FuncData {
+  v8::internal::Isolate* isolate;
+  const FuncType* type;
+  Func::callbackType callback;
+
+  FuncData(v8::internal::Isolate* isolate, const FuncType* type)
+      : isolate(isolate),
+        type(type) {}
+
+  static v8::internal::Address v8_callback(
+      void* data,
+      v8::internal::Address argv,
+      size_t memoryPages,
+      uint8_t* memoryBase);
 };
 
 void PreloadNative(Isolate* isolate,

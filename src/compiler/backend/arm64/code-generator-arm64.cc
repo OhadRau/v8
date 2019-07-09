@@ -746,7 +746,8 @@ CodeGenerator::CodeGenResult CodeGenerator::AssembleArchInstruction(
     case kArchCallCFunction: {
       int const num_parameters = MiscField::decode(instr->opcode());
       Label return_location;
-      if (linkage()->GetIncomingDescriptor()->IsWasmCapiFunction()) {
+      if (linkage()->GetIncomingDescriptor()->IsWasmCapiFunction() ||
+          linkage()->GetIncomingDescriptor()->IsWasmPreloadFunction()) {
         // Put the return address in a stack slot.
         Register scratch = x8;
         __ Adr(scratch, &return_location);
@@ -2557,7 +2558,8 @@ void CodeGenerator::AssembleConstructFrame() {
                MemOperand(fp, WasmCompiledFrameConstants::kWasmInstanceOffset));
       } break;
       case CallDescriptor::kCallWasmImportWrapper:
-      case CallDescriptor::kCallWasmCapiFunction: {
+      case CallDescriptor::kCallWasmCapiFunction:
+      case CalLDescriptor::kCallWasmPreloadFunction: {
         UseScratchRegisterScope temps(tasm());
         __ LoadTaggedPointerField(
             kJSFunctionRegister,

@@ -1133,7 +1133,7 @@ void WasmTableObject::UpdateDispatchTables(
     wasm::WasmCodeRefScope code_ref_scope;
     wasm::WasmCode* wasm_code = compiler::CompileWasmPreloadCallWrapper(
         isolate->wasm_engine(), native_module, &sig, host_address,
-        instance->memory_start());
+        instance->memory_size(), instance->memory_start());
     isolate->counters()->wasm_generated_code_size()->Increment(
         wasm_code->instructions().length());
     isolate->counters()->wasm_reloc_size()->Increment(

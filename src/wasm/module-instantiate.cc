@@ -892,7 +892,7 @@ bool InstanceBuilder::ProcessImportedFunction(
       puts("[WASM-PL] Compiling call wrapper");
       WasmCode* wasm_code = compiler::CompileWasmPreloadCallWrapper(
           isolate_->wasm_engine(), native_module, expected_sig, host_address,
-          instance->memory_start());
+          instance->memory_size(), instance->memory_start());
       wasm_code->Print("[WASM-PL]");
       puts("[WASM-PL] Incrementing counters");
       isolate_->counters()->wasm_generated_code_size()->Increment(
